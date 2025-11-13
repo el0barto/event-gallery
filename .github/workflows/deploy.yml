@@ -1,37 +1,44 @@
-name: CI/CD - Deploy to Ubuntu
+name: CI/CD - Deploy to Ubuntu Server
 
 on:
   push:
     branches:
-      - main  # Se ejecuta cuando haces push a la rama main
+      - main
 
 jobs:
   deploy:
-    name: Deploy to Ubuntu Server
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout del repositorio
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Instalar rsync
+      - name: Install rsync
         run: sudo apt-get update && sudo apt-get install -y rsync
 
-      - name: Cargar clave SSH
-        uses: webfactory/ssh-agent@v0.8.1
+      - name: Add SSH key
+        uses: shimataro/ssh-key-action@v2
         with:
-          ssh-private-key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+          key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+          known_hosts: 'github.com'
 
-      - name: Desplegar archivos al servidor
+      - name: Deploy files with rsync
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          # Opciones de sincronización
           RSYNC_OPTS="-avz --delete --exclude='.git' --exclude='.github'"
-          rsync $RSYNC_OPTS ./ ${USER}@${HOST}:/var/www/html/
+          if [ -z "$PORT" ]; then
+            RSYNC_DEST="${USER}@${HOST}:/var/www/html/"
+            SSH_OPTS=""
+          else
+            RSYNC_DEST="${USER}@${HOST}:/var/www/html/"
+            SSH_OPTS="-e 'ssh -p $PORT'"
+          fi
+          eval "rsync $RSYNC_OPTS $SSH_OPTS ./ $RSYNC_DEST"
 
-      - name: Recargar Apache
+      - name: Reload Apache
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
