@@ -1,3 +1,4 @@
+// src/lib/server/auth.ts
 import type { RequestEvent } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { sha256 } from '@oslojs/crypto/sha2';
@@ -6,7 +7,6 @@ import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
-
 export const sessionCookieName = 'auth-session';
 
 export function generateSessionToken() {
@@ -16,6 +16,11 @@ export function generateSessionToken() {
 }
 
 export async function createSession(token: string, userId: string) {
+	if (!db) {
+		console.warn('⚠️ DB not initialized — skipping createSession during build');
+		return { id: null, userId, expiresAt: new Date(Date.now() + DAY_IN_MS * 30) };
+	}
+
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	const session: table.Session = {
 		id: sessionId,
@@ -27,10 +32,14 @@ export async function createSession(token: string, userId: string) {
 }
 
 export async function validateSessionToken(token: string) {
+	if (!db) {
+		console.warn('⚠️ DB not initialized — skipping validateSessionToken during build');
+		return { session: null, user: null };
+	}
+
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	const [result] = await db
 		.select({
-			// Adjust user table here to tweak returned data
 			user: { id: table.user.id, username: table.user.username },
 			session: table.session
 		})
@@ -38,12 +47,11 @@ export async function validateSessionToken(token: string) {
 		.innerJoin(table.user, eq(table.session.userId, table.user.id))
 		.where(eq(table.session.id, sessionId));
 
-	if (!result) {
-		return { session: null, user: null };
-	}
-	const { session, user } = result;
+	if (!result) return { session: null, user: null };
 
+	const { session, user } = result;
 	const sessionExpired = Date.now() >= session.expiresAt.getTime();
+
 	if (sessionExpired) {
 		await db.delete(table.session).where(eq(table.session.id, session.id));
 		return { session: null, user: null };
@@ -64,6 +72,10 @@ export async function validateSessionToken(token: string) {
 export type SessionValidationResult = Awaited<ReturnType<typeof validateSessionToken>>;
 
 export async function invalidateSession(sessionId: string) {
+	if (!db) {
+		console.warn('⚠️ DB not initialized — skipping invalidateSession during build');
+		return;
+	}
 	await db.delete(table.session).where(eq(table.session.id, sessionId));
 }
 
