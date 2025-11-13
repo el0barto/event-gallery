@@ -1,0 +1,39 @@
+name: CI/CD - Deploy to Ubuntu
+
+on:
+  push:
+    branches:
+      - main  # Se ejecuta cuando haces push a la rama main
+
+jobs:
+  deploy:
+    name: Deploy to Ubuntu Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Cargar clave SSH
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+
+      - name: Desplegar archivos al servidor
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          # Opciones de sincronización
+          RSYNC_OPTS="-avz --delete --exclude='.git' --exclude='.github'"
+          rsync $RSYNC_OPTS ./ ${USER}@${HOST}:/var/www/html/
+
+      - name: Recargar Apache
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ${USER}@${HOST} "sudo systemctl reload apache2 || sudo systemctl restart apache2"
