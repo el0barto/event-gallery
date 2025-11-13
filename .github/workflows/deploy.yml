@@ -26,17 +26,10 @@ jobs:
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
-          PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
+          echo "Desplegando archivos en $HOST..."
           RSYNC_OPTS="-avz --delete --exclude='.git' --exclude='.github'"
-          if [ -z "$PORT" ]; then
-            RSYNC_DEST="${USER}@${HOST}:/var/www/html/"
-            SSH_OPTS=""
-          else
-            RSYNC_DEST="${USER}@${HOST}:/var/www/html/"
-            SSH_OPTS="-e 'ssh -p $PORT'"
-          fi
-          eval "rsync $RSYNC_OPTS $SSH_OPTS ./ $RSYNC_DEST"
+          rsync $RSYNC_OPTS -e "ssh -o StrictHostKeyChecking=no" ./ ${USER}@${HOST}:/var/www/html/
 
       - name: Reload Apache
         env:
