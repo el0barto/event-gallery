@@ -1,4 +1,4 @@
-name: CI/CD - Deploy to Ubuntu Server
+name: CI/CD - Deploy to Two EC2 Servers
 
 on:
   push:
@@ -22,18 +22,22 @@ jobs:
           key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
           known_hosts: 'github.com'
 
-      - name: Deploy files with rsync
+      - name: Deploy to Server 1
         env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
+          HOST: ${{ secrets.DEPLOY_HOST_1 }}
           USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          echo "Desplegando archivos en $HOST..."
+          echo "🚀 Desplegando archivos en $HOST..."
           RSYNC_OPTS="-avz --delete --exclude='.git' --exclude='.github'"
           rsync $RSYNC_OPTS -e "ssh -o StrictHostKeyChecking=no" ./ ${USER}@${HOST}:/var/www/html/
+          ssh -o StrictHostKeyChecking=no ${USER}@${HOST} "sudo systemctl reload apache2 || sudo systemctl restart apache2"
 
-      - name: Reload Apache
+      - name: Deploy to Server 2
         env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
+          HOST: ${{ secrets.DEPLOY_HOST_2 }}
           USER: ${{ secrets.DEPLOY_USER }}
         run: |
+          echo "🚀 Desplegando archivos en $HOST..."
+          RSYNC_OPTS="-avz --delete --exclude='.git' --exclude='.github'"
+          rsync $RSYNC_OPTS -e "ssh -o StrictHostKeyChecking=no" ./ ${USER}@${HOST}:/var/www/html/
           ssh -o StrictHostKeyChecking=no ${USER}@${HOST} "sudo systemctl reload apache2 || sudo systemctl restart apache2"
